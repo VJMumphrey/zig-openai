@@ -48,7 +48,7 @@ pub fn main() !void {
 ## Installation
 
 ```bash
-$ zig fetch --save git+https://github.com/FOLLGAD/zig-ai
+$ zig fetch --save git+https://github.com/VJMumphrey/zig-ai
 ```
 
 and add `zig-ai` to your `build.zig` file:

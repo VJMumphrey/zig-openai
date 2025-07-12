@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const module = b.addModule("zig-ai", .{
+    const module = b.addModule("zig-openai", .{
         .root_source_file = b.path("src/llm.zig"),
     });
 
@@ -14,5 +14,5 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    stream_example.root_module.addImport("zig-ai", module);
+    stream_example.root_module.addImport("zig-openai", module);
 }
