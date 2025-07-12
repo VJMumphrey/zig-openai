@@ -1,4 +1,4 @@
-# zig-ai
+# zig-openai
 
 A simple OpenAI API client for Zig with streaming support.
 
@@ -10,7 +10,7 @@ With streaming:
 
 ```zig
 const std = @import("std");
-const OpenAI = @import("zig-ai");
+const OpenAI = @import("zig-openai");
 
 pub fn main() !void {
     // ...
@@ -51,7 +51,7 @@ pub fn main() !void {
 $ zig fetch --save git+https://github.com/VJMumphrey/zig-openai
 ```
 
-and add `zig-ai` to your `build.zig` file:
+and add `zig-openai` to your `build.zig` file:
 
 ```zig
 const std = @import("std");
@@ -67,13 +67,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const module = b.dependency("zig-ai", .{
+    const module = b.dependency("zig-openai", .{
         .root_source_file = b.path("src/llm.zig"),
     });
-    exe.root_module.addImport("zig-ai", module.module("zig-ai"));
+    exe.root_module.addImport("zig-openai", module.module("zig-openai"));
 }
 ```
 
 ## Usage
 
 See the `examples` directory for usage examples.
+
+## Credit
+Forked from FOLLGAD [github](https://github.com/FOLLGAD).
