@@ -7,7 +7,8 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // Initialize OpenAI client
-    var openai = try OpenAI.Client.init(allocator, null, null);
+    // this is for ollama but should work for other systems
+    var openai = try OpenAI.Client.init(allocator, null, null, "http://localhost:11434/v1");
 
     const stdin = std.io.getStdIn().reader();
     var buf_reader = std.io.bufferedReader(stdin);

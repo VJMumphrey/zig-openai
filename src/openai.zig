@@ -71,6 +71,7 @@ const StreamReader = struct {
     request: std.http.Client.Request,
     buffer: [2048]u8 = undefined,
 
+    // TODO: remove the memory allocation and bubble up for user to decide
     pub fn init(request: std.http.Client.Request) !StreamReader {
         return .{
             .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
@@ -142,10 +143,14 @@ pub const Client = struct {
 
     arena: std.heap.ArenaAllocator,
 
-    pub fn init(allocator: Allocator, api_key: ?[]const u8, organization_id: ?[]const u8) !Client {
+    pub fn init(allocator: Allocator, api_key: ?[]const u8, organization_id: ?[]const u8, url: ?[]const u8) !Client {
+        // so you can set local servers that have a openai api server
+        const base_url = url;
         var env = try std.process.getEnvMap(allocator);
         defer env.deinit();
-        const _api_key = api_key orelse env.get("OPENAI_API_KEY") orelse return error.MissingAPIKey;
+        // if someone wants to use this for openai, the intention is that its still works
+        if base_url == "https://api.openai.com/v1")
+            const _api_key = api_key orelse env.get("OPENAI_API_KEY") orelse return error.MissingAPIKey;
         const openai_api_key = try allocator.dupe(u8, _api_key);
 
         var arena = std.heap.ArenaAllocator.init(allocator); // Initialize arena

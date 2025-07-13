@@ -1,8 +1,8 @@
 .{
     .name = .zig_openai,
-    .version = "0.0.4",
+    .version = "0.0.5",
     .fingerprint = 0xfbdb4565e2b11461, // Changing this has security and trust implications.
-    .minimum_version = "0.14.1",
+    .minimum_zig_version = "0.14.1",
     .dependencies = .{},
     .paths = .{
         "build.zig",

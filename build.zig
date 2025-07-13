@@ -6,6 +6,8 @@ pub fn build(b: *std.Build) void {
 
     const module = b.addModule("zig_openai", .{
         .root_source_file = b.path("src/openai.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
     const stream_example = b.addExecutable(.{
