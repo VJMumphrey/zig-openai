@@ -10,7 +10,14 @@ pub const Usage = struct {
     total_tokens: u64,
 };
 
-pub const Choice = struct { index: usize, finish_reason: ?[]const u8, message: struct { role: []const u8, content: []const u8 } };
+pub const Choice = struct {
+    index: usize,
+    finish_reason: ?[]const u8,
+    message: struct {
+        role: []const u8,
+        content: []const u8,
+    },
+};
 
 pub const ChatResponse = struct {
     id: []const u8,
@@ -21,7 +28,14 @@ pub const ChatResponse = struct {
     usage: Usage,
 };
 
-pub const DeltaChoice = struct { index: usize, delta: struct { role: ?[]const u8 = null, content: ?[]const u8 = null } };
+pub const DeltaChoice = struct {
+    index: usize,
+    delta: struct {
+        role: ?[]const u8 = null,
+        content: ?[]const u8 = null,
+    },
+};
+
 pub const StreamResponse = struct {
     id: []const u8,
     object: []const u8,
@@ -105,7 +119,12 @@ const StreamReader = struct {
     }
 };
 
-pub const ChatPayload = struct { model: []const u8, messages: []Message, max_tokens: ?u32, temperature: ?f32 };
+pub const ChatPayload = struct {
+    model: []const u8,
+    messages: []Message,
+    max_tokens: ?u32,
+    temperature: ?f32,
+};
 
 const OpenAIError = error{
     BadRequest,
@@ -143,15 +162,21 @@ pub const Client = struct {
 
     arena: std.heap.ArenaAllocator,
 
-    pub fn init(allocator: Allocator, api_key: ?[]const u8, organization_id: ?[]const u8, url: ?[]const u8) !Client {
+    pub fn init(
+        allocator: Allocator,
+        api_key: ?[]const u8,
+        organization_id: ?[]const u8,
+        url: ?[]const u8,
+    ) !Client {
         // so you can set local servers that have a openai api server
-        const base_url = url;
-        var env = try std.process.getEnvMap(allocator);
-        defer env.deinit();
-        // if someone wants to use this for openai, the intention is that its still works
-        if base_url == "https://api.openai.com/v1")
+        if (url == "") {
+            var env = try std.process.getEnvMap(allocator);
+            defer env.deinit();
             const _api_key = api_key orelse env.get("OPENAI_API_KEY") orelse return error.MissingAPIKey;
-        const openai_api_key = try allocator.dupe(u8, _api_key);
+            const openai_api_key = try allocator.dupe(u8, _api_key);
+        } else {
+            const base_url = url;
+        }
 
         var arena = std.heap.ArenaAllocator.init(allocator); // Initialize arena
         errdefer arena.deinit(); // Ensure arena is deinitialized on error
