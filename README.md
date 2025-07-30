@@ -47,6 +47,8 @@ pub fn main() !void {
 
 ## Installation
 
+This pulls the latest release from main.
+Eventually tagged releases will be introduced for version locking.
 ```bash
 $ zig fetch --save git+https://github.com/VJMumphrey/zig-openai
 ```
@@ -54,17 +56,11 @@ $ zig fetch --save git+https://github.com/VJMumphrey/zig-openai
 and add `zig-openai` to your `build.zig` file:
 
 ```zig
-const std = @import("std");
-
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    const module = b.dependency("zig_openai", .{
-        .root_source_file = b.path("src/root.zig"),
-    });
-    exe.root_module.addImport("zig_openai", module.module("zig_openai"));
-}
+const zig_openai = b.dependency("zig_openai", .{
+    .target = target,
+    .optimize = optimize,
+});
+exe.root_module.addImport("zig_openai", module.module("zig_openai"));
 ```
 
 ## Usage
