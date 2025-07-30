@@ -2,6 +2,7 @@ const std = @import("std");
 const meta = @import("std").meta;
 const log = std.log;
 
+const expect = std.testing.expect;
 const Allocator = std.mem.Allocator;
 
 pub const Usage = struct {
@@ -14,8 +15,8 @@ pub const Choice = struct {
     index: usize,
     finish_reason: ?[]const u8,
     message: struct {
-        role: []const u8,
-        content: []const u8,
+        role: ?[]const u8 = null,
+        content: ?[]const u8 = null,
     },
 };
 
@@ -85,7 +86,6 @@ const StreamReader = struct {
     request: std.http.Client.Request,
     buffer: [2048]u8 = undefined,
 
-    // TODO: remove the memory allocation and bubble up for user to decide
     pub fn init(request: std.http.Client.Request) !StreamReader {
         return .{
             .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
@@ -110,7 +110,10 @@ const StreamReader = struct {
 
             if (std.mem.eql(u8, data, "[DONE]")) return null;
 
-            const parsed = try std.json.parseFromSlice(StreamResponse, self.arena.allocator(), data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+            const parsed = try std.json.parseFromSlice(StreamResponse, self.arena.allocator(), data, .{
+                .ignore_unknown_fields = true,
+                .allocate = .alloc_always,
+            });
 
             return parsed.value;
         }
@@ -154,8 +157,8 @@ fn getError(status: std.http.Status) OpenAIError {
 }
 
 pub const Client = struct {
-    base_url: []const u8 = "https://api.openai.com/v1",
-    api_key: []const u8,
+    base_url: []const u8,
+    api_key: ?[]const u8,
     organization_id: ?[]const u8,
     allocator: Allocator,
     http_client: std.http.Client,
@@ -164,19 +167,17 @@ pub const Client = struct {
 
     pub fn init(
         allocator: Allocator,
-        api_key: ?[]const u8,
         organization_id: ?[]const u8,
+        // don't supply for default OpenAI url
         url: ?[]const u8,
     ) !Client {
-        // so you can set local servers that have a openai api server
-        if (url == "") {
-            var env = try std.process.getEnvMap(allocator);
-            defer env.deinit();
-            const _api_key = api_key orelse env.get("OPENAI_API_KEY") orelse return error.MissingAPIKey;
-            const openai_api_key = try allocator.dupe(u8, _api_key);
-        } else {
-            const base_url = url;
-        }
+        const base_url: []const u8 = url orelse "https://api.openai.com/v1";
+
+        var env = try std.process.getEnvMap(allocator);
+        defer env.deinit();
+
+        const _api_key = env.get("OPENAI_API_KEY") orelse return error.MissingAPIKey;
+        const api_key = try allocator.dupe(u8, _api_key);
 
         var arena = std.heap.ArenaAllocator.init(allocator); // Initialize arena
         errdefer arena.deinit(); // Ensure arena is deinitialized on error
@@ -188,15 +189,16 @@ pub const Client = struct {
         };
 
         return Client{
+            .base_url = base_url,
             .allocator = allocator,
-            .api_key = openai_api_key,
+            .api_key = api_key,
             .organization_id = organization_id,
             .http_client = http_client,
             .arena = arena,
         };
     }
 
-    fn get_headers(alloc: std.mem.Allocator, api_key: []const u8) !std.http.Client.Request.Headers {
+    fn get_headers(alloc: std.mem.Allocator, api_key: ?[]const u8) !std.http.Client.Request.Headers {
         const auth_header = try std.fmt.allocPrint(alloc, "Bearer {s}", .{api_key});
         const headers = std.http.Client.Request.Headers{
             .content_type = .{ .override = "application/json" },
@@ -277,7 +279,10 @@ pub const Client = struct {
         const response = try req.reader().readAllAlloc(self.allocator, 1024 * 8);
         defer self.allocator.free(response);
 
-        const parsed = try std.json.parseFromSlice(ChatResponse, self.allocator, response, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+        const parsed = try std.json.parseFromSlice(ChatResponse, self.allocator, response, .{
+            .ignore_unknown_fields = true,
+            .allocate = .alloc_always,
+        });
 
         return parsed;
     }
