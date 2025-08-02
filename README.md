@@ -1,6 +1,6 @@
 # zig-openai
 
-A simple OpenAI API client for Zig with streaming support.
+A simple OpenAI API client (and maybe server at some point) for Zig with streaming support.
 
 Find examples in the [`examples`](./examples) directory.
 
@@ -46,6 +46,8 @@ pub fn main() !void {
 ```
 
 ## Installation
+Currently the library is held at 0.14.1 of zig until the IO changes from 0.15 are stabble enough
+in the dev branch. This will not work on zig master at the moment.
 
 This pulls the latest release from main.
 Eventually tagged releases will be introduced for version locking.
@@ -66,6 +68,17 @@ exe.root_module.addImport("zig_openai", module.module("zig_openai"));
 ## Usage
 
 See the `examples` directory for usage examples.
+Eventually the examples will be build and compiled with zig run <example> for ease of use.
+
+## Testing
+
+For testing there are two tests included in bottom of root.zig.
+Remote will be implemented at some point. To test run,
+```bash
+zig test src/root.zig
+```
+There are plans to improve the testing since this system will get more complicated as more of the 
+standard is implemented.
 
 ## Credit
 Forked from FOLLGAD [github](https://github.com/FOLLGAD).
