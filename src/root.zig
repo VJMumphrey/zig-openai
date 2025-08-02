@@ -2,7 +2,6 @@ const std = @import("std");
 const meta = @import("std").meta;
 const log = std.log;
 
-const expect = std.testing.expect;
 const Allocator = std.mem.Allocator;
 
 pub const Usage = struct {
@@ -176,8 +175,13 @@ pub const Client = struct {
         var env = try std.process.getEnvMap(allocator);
         defer env.deinit();
 
-        const _api_key = env.get("OPENAI_API_KEY") orelse return error.MissingAPIKey;
-        const api_key = try allocator.dupe(u8, _api_key);
+        var api_key: []u8 = undefined;
+        if (!std.mem.eql(u8, base_url, url.?)) {
+            const _api_key = env.get("OPENAI_API_KEY") orelse return error.MissingAPIKey;
+            api_key = try allocator.dupe(u8, _api_key);
+        } else {
+            api_key = "";
+        }
 
         var arena = std.heap.ArenaAllocator.init(allocator); // Initialize arena
         errdefer arena.deinit(); // Ensure arena is deinitialized on error
@@ -192,14 +196,14 @@ pub const Client = struct {
             .base_url = base_url,
             .allocator = allocator,
             .api_key = api_key,
-            .organization_id = organization_id,
+            .organization_id = organization_id orelse "",
             .http_client = http_client,
             .arena = arena,
         };
     }
 
     fn get_headers(alloc: std.mem.Allocator, api_key: ?[]const u8) !std.http.Client.Request.Headers {
-        const auth_header = try std.fmt.allocPrint(alloc, "Bearer {s}", .{api_key});
+        const auth_header = try std.fmt.allocPrint(alloc, "Bearer {s}", .{api_key orelse ""});
         const headers = std.http.Client.Request.Headers{
             .content_type = .{ .override = "application/json" },
             .authorization = .{ .override = auth_header },
@@ -264,7 +268,9 @@ pub const Client = struct {
             .max_tokens = payload.max_tokens,
             .temperature = payload.temperature,
         };
-        const body = try std.json.stringifyAlloc(self.allocator, options, .{ .whitespace = .indent_2 });
+        const body = try std.json.stringifyAlloc(self.allocator, options, .{
+            .whitespace = .indent_2,
+        });
         defer self.allocator.free(body);
 
         var req = try self.makeCall("/chat/completions", body, verbose);
@@ -296,3 +302,37 @@ pub const Client = struct {
         self.arena.deinit();
     }
 };
+
+// goal is to create a local client an get a small message
+// any model will do
+test "create_client_local" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    errdefer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    // there is a llamacpp server running locally for the tests
+    var client = try Client.init(allocator, null, "http://localhost:8080/v1");
+
+    var messages = std.ArrayList(Message).init(allocator);
+    try messages.append(.{
+        .role = "system",
+        .content = "Return only with the word `True`.",
+    });
+
+    const payload = ChatPayload{
+        .model = "gemma-3n-E4B-it-GGUF",
+        .messages = messages.items,
+        .max_tokens = 1,
+        .temperature = 0.1,
+    };
+    const response = try client.chat(payload, false);
+    if (response.value.choices[0].message.content) |content| {
+        //const string = try std.fmt.allocPrint(allocator, "{?s}", .{content});
+        //std.debug.print("Response: {?s}\n", .{content});
+        std.debug.print("Result: {s}\n", .{content});
+        try std.testing.expect(content.len > 0);
+    }
+}
+
+// TODO maybe give fake api key for now and expect key failure
+test "create client for remote" {}

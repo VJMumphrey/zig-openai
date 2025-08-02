@@ -12,9 +12,7 @@ pub fn build(b: *std.Build) void {
 
     const stream_example = b.addExecutable(.{
         .name = "stream_cli",
-        .root_source_file = b.path("examples/stream-cli.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = module,
     });
     stream_example.root_module.addImport("zig_openai", module);
 }
