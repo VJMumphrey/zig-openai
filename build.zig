@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) void {
     const example_option = b.option(
         enum {
             stream,
+            chat,
             // more later
         },
         "example",
@@ -21,7 +22,7 @@ pub fn build(b: *std.Build) void {
     ) orelse .stream;
 
     const examples = b.addExecutable(.{
-        .name = "stream_cli",
+        .name = "example",
         .root_source_file = b.path(b.fmt("examples/{s}.zig", .{@tagName(example_option)})),
         .target = target,
         .optimize = optimize,
