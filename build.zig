@@ -10,9 +10,24 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const stream_example = b.addExecutable(.{
+    const example_step = b.step("example", "Run the example");
+    const example_option = b.option(
+        enum {
+            stream,
+            // more later
+        },
+        "example",
+        "Example to run for the example step, default is stream for now.",
+    ) orelse .stream;
+
+    const examples = b.addExecutable(.{
         .name = "stream_cli",
-        .root_module = module,
+        .root_source_file = b.path(b.fmt("examples/{s}.zig", .{@tagName(example_option)})),
+        .target = target,
+        .optimize = optimize,
     });
-    stream_example.root_module.addImport("zig_openai", module);
+    examples.root_module.addImport("zig_openai", module);
+    const run_example = b.addRunArtifact(examples);
+    if (b.args) |args| run_example.addArgs(args);
+    example_step.dependOn(&run_example.step);
 }

@@ -66,9 +66,14 @@ exe.root_module.addImport("zig_openai", module.module("zig_openai"));
 ```
 
 ## Usage
-
 See the `examples` directory for usage examples.
-Eventually the examples will be build and compiled with zig run <example> for ease of use.
+
+## Running Examples
+The system is like [flags](https://github.com/joegm/flags/tree/main).
+```bash
+zig build example -Dexample=<name> -- <arguments...>
+```
+This will stay untill things need to be changed or updated.
 
 ## Testing
 

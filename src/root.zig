@@ -307,7 +307,7 @@ pub const Client = struct {
 // any model will do
 test "create_client_local" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    errdefer _ = gpa.deinit();
+    defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
     // there is a llamacpp server running locally for the tests
@@ -316,7 +316,12 @@ test "create_client_local" {
     var messages = std.ArrayList(Message).init(allocator);
     try messages.append(.{
         .role = "system",
-        .content = "Return only with the word `True`.",
+        .content = "Return True.",
+    });
+
+    try messages.append(.{
+        .role = "user",
+        .content = "Return True.",
     });
 
     const payload = ChatPayload{
@@ -325,7 +330,9 @@ test "create_client_local" {
         .max_tokens = 1,
         .temperature = 0.1,
     };
+
     const response = try client.chat(payload, false);
+    defer response.deinit();
     if (response.value.choices[0].message.content) |content| {
         //const string = try std.fmt.allocPrint(allocator, "{?s}", .{content});
         //std.debug.print("Response: {?s}\n", .{content});

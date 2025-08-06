@@ -1,14 +1,16 @@
 const std = @import("std");
-const OpenAI = @import("zig-ai");
+const OpenAI = @import("zig_openai");
 
+// this is example runs a simple chat
+// BUG: crashes after single run
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
     // Initialize OpenAI client
-    // this is for ollama but should work for other systems
-    var openai = try OpenAI.Client.init(allocator, null, null, "http://localhost:11434/v1");
+    // this is for llamacpp but should work for other openai servers 
+    var openai = try OpenAI.Client.init(allocator, null, "http://localhost:8080/v1");
 
     const stdin = std.io.getStdIn().reader();
     var buf_reader = std.io.bufferedReader(stdin);
@@ -31,14 +33,14 @@ pub fn main() !void {
         try buf_writer.flush();
 
         if (try reader.readUntilDelimiterOrEof(&buffer, '\n')) |line| {
-            const user_message = .{
+            const user_message = OpenAI.Message{
                 .role = "user",
                 .content = try allocator.dupe(u8, line),
             };
             try messages.append(user_message);
 
             const payload = OpenAI.ChatPayload{
-                .model = "gpt-4o",
+                .model = "gemma-3n-E4B-it-Q4_K_M.gguf",
                 .messages = messages.items,
                 .max_tokens = 1000,
                 .temperature = 0.2,
