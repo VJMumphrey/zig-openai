@@ -1,4 +1,7 @@
 .zig-cache/
+docs/
+libroot.a
+libroot.a.o
 zig-out/
 /release/
 /debug/

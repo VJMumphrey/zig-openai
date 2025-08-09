@@ -85,5 +85,16 @@ zig test src/root.zig
 There are plans to improve the testing since this system will get more complicated as more of the 
 standard is implemented.
 
+## Documentation
+You can build the docs the standard way with,
+```bash
+zig build-lib -femit-docs src/root.zig
+```
+Then run a python server to view the documentation in your browser with,
+```bash
+python -m http.server 8000 -b 127.0.0.1 docs/
+```
+Note that this command is ran in the root of the project.
+
 ## Credit
 Forked from FOLLGAD [github](https://github.com/FOLLGAD).

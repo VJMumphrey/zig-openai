@@ -1,6 +1,6 @@
+//! Single file definition for the library.
 const std = @import("std");
-const meta = @import("std").meta;
-const log = std.log;
+//const meta = @import("std").meta;
 
 const Allocator = std.mem.Allocator;
 
@@ -19,6 +19,7 @@ pub const Choice = struct {
     },
 };
 
+/// Simple chat api model
 pub const ChatResponse = struct {
     id: []const u8,
     object: []const u8,
@@ -36,6 +37,7 @@ pub const DeltaChoice = struct {
     },
 };
 
+/// Streaming reponse api model
 pub const StreamResponse = struct {
     id: []const u8,
     object: []const u8,
@@ -44,12 +46,14 @@ pub const StreamResponse = struct {
     choices: []DeltaChoice,
 };
 
+/// may convert to an enum at some point
 pub const Role = struct {
     pub const system = "system";
     pub const user = "user";
     pub const assistant = "assistant";
 };
 
+/// Message definition with helpers
 pub const Message = struct {
     role: []const u8,
     content: []const u8,
@@ -121,6 +125,8 @@ const StreamReader = struct {
     }
 };
 
+/// Payload model that used to expand and capture more features
+/// of the openai api structure.
 pub const ChatPayload = struct {
     model: []const u8,
     messages: []Message,
@@ -128,6 +134,7 @@ pub const ChatPayload = struct {
     temperature: ?f32,
 };
 
+/// List of errors that can happen
 const OpenAIError = error{
     BadRequest,
     Unauthorized,
@@ -140,6 +147,8 @@ const OpenAIError = error{
     Unknown,
 };
 
+/// Helper function that is used to parse out http errors from a server
+/// and return them for use in the lib.
 fn getError(status: std.http.Status) OpenAIError {
     const result = switch (status) {
         .bad_request => OpenAIError.BadRequest,
@@ -155,6 +164,8 @@ fn getError(status: std.http.Status) OpenAIError {
     return result;
 }
 
+/// Client struct is used to handle the interactions from a consumer to a server.
+/// This struct makes allocations with the given allocator.
 pub const Client = struct {
     base_url: []const u8,
     api_key: ?[]const u8,
@@ -164,6 +175,8 @@ pub const Client = struct {
 
     arena: std.heap.ArenaAllocator,
 
+    /// init function for clients that creates a client with values set
+    /// from the consumer.
     pub fn init(
         allocator: Allocator,
         organization_id: ?[]const u8,
@@ -202,6 +215,7 @@ pub const Client = struct {
         };
     }
 
+    /// helper function to modify headers to allows for api keys and set content type.
     fn get_headers(alloc: std.mem.Allocator, api_key: ?[]const u8) !std.http.Client.Request.Headers {
         const auth_header = try std.fmt.allocPrint(alloc, "Bearer {s}", .{api_key orelse ""});
         const headers = std.http.Client.Request.Headers{
@@ -211,6 +225,7 @@ pub const Client = struct {
         return headers;
     }
 
+    /// helper function to perform the calling logic
     fn makeCall(self: *Client, endpoint: []const u8, body: []const u8, _: bool) !std.http.Client.Request {
         const headers = try get_headers(self.allocator, self.api_key);
         defer self.allocator.free(headers.authorization.override);
@@ -294,7 +309,9 @@ pub const Client = struct {
     }
 
     pub fn deinit(self: *Client) void {
-        self.allocator.free(self.api_key);
+        if (self.api_key) |key| {
+            self.allocator.free(key);
+        }
         if (self.organization_id) |org_id| {
             self.allocator.free(org_id);
         }
@@ -306,18 +323,18 @@ pub const Client = struct {
 // goal is to create a local client an get a small message
 // any model will do
 test "create_client_local" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const gpa = std.testing.allocator;
 
     // there is a llamacpp server running locally for the tests
-    var client = try Client.init(allocator, null, "http://localhost:8080/v1");
-
-    var messages = std.ArrayList(Message).init(allocator);
+    var client = try Client.init(gpa, null, "http://localhost:8080/v1");
+    defer client.deinit();
+    
+    var messages = std.ArrayList(Message).init(gpa);
     try messages.append(.{
         .role = "system",
         .content = "Return True.",
     });
+    defer messages.deinit();
 
     try messages.append(.{
         .role = "user",
@@ -331,15 +348,18 @@ test "create_client_local" {
         .temperature = 0.1,
     };
 
+    // might be worth it to write a switch here for error handeling
+    // as a consumer
     const response = try client.chat(payload, false);
     defer response.deinit();
+
     if (response.value.choices[0].message.content) |content| {
-        //const string = try std.fmt.allocPrint(allocator, "{?s}", .{content});
-        //std.debug.print("Response: {?s}\n", .{content});
-        std.debug.print("Result: {s}\n", .{content});
+        _ = try std.fmt.allocPrint(gpa, "{?s}", .{content});
         try std.testing.expect(content.len > 0);
     }
 }
 
 // TODO maybe give fake api key for now and expect key failure
-test "create client for remote" {}
+test "create client for remote" {
+    return error.SkipZigTest;
+}
