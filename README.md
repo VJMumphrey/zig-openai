@@ -46,8 +46,8 @@ pub fn main() !void {
 ```
 
 ## Installation
-Currently the library is held at 0.14.1 of zig until the IO changes from 0.15 are stabble enough
-in the dev branch. This will not work on zig master at the moment.
+Currently things work for master and stable (0.15.1) branches of zig.
+I do not expect this to always last and will be trying to keep up with the master branch as a main priority.
 
 This pulls the latest release from main.
 Eventually tagged releases will be introduced for version locking.
@@ -84,6 +84,8 @@ zig test src/root.zig
 ```
 There are plans to improve the testing since this system will get more complicated as more of the 
 standard is implemented.
+
+For testing I run a local compiled instance of, [llama.cpp server](https://github.com/ggml-org/llama.cpp), running a small model.
 
 ## Documentation
 You can build the docs the standard way with,
