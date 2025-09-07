@@ -23,11 +23,15 @@ pub fn build(b: *std.Build) void {
 
     const examples = b.addExecutable(.{
         .name = "example",
-        .root_source_file = b.path(b.fmt("examples/{s}.zig", .{@tagName(example_option)})),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path(b.fmt("examples/{s}.zig", .{@tagName(example_option)})),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{.name = "zig_openai", .module = module},
+            }
+        }),
     });
-    examples.root_module.addImport("zig_openai", module);
     const run_example = b.addRunArtifact(examples);
     if (b.args) |args| run_example.addArgs(args);
     example_step.dependOn(&run_example.step);

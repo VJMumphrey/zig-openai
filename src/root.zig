@@ -1,8 +1,8 @@
 //! Single file definition for the library.
 const std = @import("std");
-//const meta = @import("std").meta;
-
 const Allocator = std.mem.Allocator;
+
+//const meta = @import("std").meta;
 
 pub const Usage = struct {
     prompt_tokens: u64,
@@ -184,7 +184,6 @@ pub const Client = struct {
         url: ?[]const u8,
     ) !Client {
         const base_url: []const u8 = url orelse "https://api.openai.com/v1";
-
         var env = try std.process.getEnvMap(allocator);
         defer env.deinit();
 
@@ -226,25 +225,20 @@ pub const Client = struct {
     }
 
     /// helper function to perform the calling logic
-    fn makeCall(self: *Client, endpoint: []const u8, body: []const u8, _: bool) !std.http.Client.Request {
+    fn makeCall(self: *Client, endpoint: []const u8, body: []u8, _: bool) !std.http.Client.Request {
         const headers = try get_headers(self.allocator, self.api_key);
         defer self.allocator.free(headers.authorization.override);
-
-        var buf: [16 * 1024]u8 = undefined;
 
         const path = try std.fmt.allocPrint(self.allocator, "{s}{s}", .{ self.base_url, endpoint });
         defer self.allocator.free(path);
         const uri = try std.Uri.parse(path);
 
-        var req = try self.http_client.open(.POST, uri, .{ .headers = headers, .server_header_buffer = &buf });
+        var req = try self.http_client.request(.POST, uri, .{ .headers = headers });
         errdefer req.deinit();
 
         req.transfer_encoding = .{ .content_length = body.len };
 
-        try req.send();
-        try req.writeAll(body);
-        try req.finish();
-        try req.wait();
+        try req.sendBodyComplete(body);
 
         return req;
     }
@@ -260,13 +254,19 @@ pub const Client = struct {
             .temperature = payload.temperature,
             .stream = true,
         };
-        const body = try std.json.stringifyAlloc(self.allocator, options, .{});
-        defer self.allocator.free(body);
 
-        var req = try self.makeCall("/chat/completions", body, verbose);
+        var out: std.Io.Writer.Allocating = .init(self.allocator);
+        try std.json.Stringify.value(options, .{}, &out.writer);
 
-        if (req.response.status != .ok) {
-            const err = getError(req.response.status);
+        const arr = out.toArrayList();
+        defer self.allocator.free(arr);
+
+        var req = try self.makeCall("/chat/completions", arr.items, verbose);
+
+        const response = try req.receiveHead(&.{});
+
+        if (response.head.status != .ok) {
+            const err = getError(response.head.status);
             req.deinit();
             return err;
         }
@@ -277,30 +277,61 @@ pub const Client = struct {
     /// Makes a chat completion request to the OpenAI API.
     /// Caller owns the returned memory and must call deinit() on the result.
     pub fn chat(self: *Client, payload: ChatPayload, verbose: bool) !std.json.Parsed(ChatResponse) {
+
+        // TODO: this should be set to what ever the token limit is
+        var trans_buffer: [8096]u8 = undefined;
+        var read_buffer: [8096]u8 = undefined;
+
         const options = .{
             .model = payload.model,
             .messages = payload.messages,
             .max_tokens = payload.max_tokens,
             .temperature = payload.temperature,
         };
-        const body = try std.json.stringifyAlloc(self.allocator, options, .{
-            .whitespace = .indent_2,
-        });
-        defer self.allocator.free(body);
 
-        var req = try self.makeCall("/chat/completions", body, verbose);
+        var out: std.Io.Writer.Allocating = .init(self.allocator);
+        try std.json.Stringify.value(
+            options,
+            .{
+                .whitespace = .indent_2,
+            },
+            &out.writer,
+        );
+
+        var arr: std.ArrayList(u8) = out.toArrayList();
+        defer arr.deinit(self.allocator);
+
+        var req = try self.makeCall("/chat/completions", arr.items, verbose);
         defer req.deinit();
 
-        if (req.response.status != .ok) {
-            const err = getError(req.response.status);
+        const response = try req.receiveHead(&.{});
+
+        if (response.head.status != .ok) {
+            const err = getError(response.head.status);
             req.deinit();
             return err;
         }
 
-        const response = try req.reader().readAllAlloc(self.allocator, 1024 * 8);
-        defer self.allocator.free(response);
 
-        const parsed = try std.json.parseFromSlice(ChatResponse, self.allocator, response, .{
+        // BUG: This is empty, get a 200 above.
+        const response_body: *std.Io.Reader = req.reader.bodyReader(
+            &trans_buffer,
+            req.response_transfer_encoding,
+            req.response_content_length,
+        );
+
+        // DEBUG code
+        std.debug.print("Status {d}", .{response.head.status});
+        std.debug.print("Buff len {d}", .{response_body.bufferedLen()});
+        for (response_body.buffered()) |char| {
+            std.debug.print("hello{c}", .{char});
+        }
+
+        const size =  try response_body.readSliceShort(&read_buffer);
+        
+
+        // note: this is up to the end user to free.
+        const parsed = try std.json.parseFromSlice(ChatResponse, self.allocator, read_buffer[0..size], .{
             .ignore_unknown_fields = true,
             .allocate = .alloc_always,
         });
@@ -328,18 +359,26 @@ test "create_client_local" {
     // there is a llamacpp server running locally for the tests
     var client = try Client.init(gpa, null, "http://localhost:8080/v1");
     defer client.deinit();
-    
-    var messages = std.ArrayList(Message).init(gpa);
-    try messages.append(.{
+
+    var messages = std.ArrayList(Message).empty;
+    defer messages.deinit(gpa);
+
+    const user = Message{
+        .role = "system",
+        .content = "You are a simple agent. Return True.",
+    };
+
+    const system = Message{
         .role = "system",
         .content = "Return True.",
-    });
-    defer messages.deinit();
+    };
 
-    try messages.append(.{
-        .role = "user",
-        .content = "Return True.",
-    });
+    // Its a good idea to check and make sure the array is
+    // allocated to the proper amount if known at compile time.
+    // If not there are other fn availible.
+    //_ = messages.addManyAsArrayAssumeCapacity(2);
+    try messages.append(gpa, system);
+    try messages.append(gpa, user);
 
     const payload = ChatPayload{
         .model = "gemma-3n-E4B-it-GGUF",
@@ -354,9 +393,10 @@ test "create_client_local" {
     defer response.deinit();
 
     if (response.value.choices[0].message.content) |content| {
-        _ = try std.fmt.allocPrint(gpa, "{?s}", .{content});
+        //_ = try std.fmt.allocPrint(gpa, "{s}", .{content});
         try std.testing.expect(content.len > 0);
     }
+
 }
 
 // TODO maybe give fake api key for now and expect key failure
