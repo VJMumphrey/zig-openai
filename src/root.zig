@@ -353,7 +353,7 @@ pub const Client = struct {
 
 // goal is to create a local client an get a small message
 // any model will do
-test "create_client_local" {
+test "client_local_chat" {
     const gpa = std.testing.allocator;
 
     // there is a llamacpp server running locally for the tests
@@ -396,6 +396,49 @@ test "create_client_local" {
         //_ = try std.fmt.allocPrint(gpa, "{s}", .{content});
         try std.testing.expect(content.len > 0);
     }
+
+}
+
+// TODO: test once fixes are finished
+test "client_local_streamChat" {
+    const gpa = std.testing.allocator;
+
+    // there is a llamacpp server running locally for the tests
+    var client = try Client.init(gpa, null, "http://localhost:8080/v1");
+    defer client.deinit();
+
+    var messages = std.ArrayList(Message).empty;
+    defer messages.deinit(gpa);
+
+    const user = Message{
+        .role = "system",
+        .content = "You are a simple agent. Return True.",
+    };
+
+    const system = Message{
+        .role = "system",
+        .content = "Return True.",
+    };
+
+    // Its a good idea to check and make sure the array is
+    // allocated to the proper amount if known at compile time.
+    // If not there are other fn availible.
+    //_ = messages.addManyAsArrayAssumeCapacity(2);
+    try messages.append(gpa, system);
+    try messages.append(gpa, user);
+
+    const payload = ChatPayload{
+        .model = "gemma-3n-E4B-it-GGUF",
+        .messages = messages.items,
+        .max_tokens = 1,
+        .temperature = 0.1,
+    };
+
+    var reader = try client.streamChat(payload, false);
+
+    const resp = try reader.next();
+    const content = resp.?.choices[0].delta.content;
+    try std.testing.expect(content.len > 0);
 
 }
 
