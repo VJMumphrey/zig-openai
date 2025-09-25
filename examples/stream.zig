@@ -6,38 +6,48 @@ const OpenAI = @import("zig_openai");
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const gpa = gpa.allocator();
 
     // Initialize OpenAI client
-    // this is for llamacpp but should work for other openai servers 
-    var openai = try OpenAI.Client.init(allocator, null, "http://localhost:8080/v1");
+    // this is for llamacpp but should work for other openai compliant servers 
+    var openai = try OpenAI.Client.init(gpa, null, "http://localhost:8080/v1");
+    defer openai.deinit();
 
-    const stdin = std.io.getStdIn().reader();
-    var buf_reader = std.io.bufferedReader(stdin);
-    const reader = buf_reader.reader();
+    // setup IO for read and write to shell
+    var stdin_buffer: [1024]u8 = undefined;
+    var stdout_buffer: [1024]u8 = undefined;
 
-    const stdout = std.io.getStdOut().writer();
-    var buf_writer = std.io.bufferedWriter(stdout);
-    const writer = buf_writer.writer();
+    const stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
+    const stdin = &stdin_reader.interface;
+
+    const stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
 
     var buffer: [1024]u8 = undefined;
 
-    var messages = std.ArrayList(OpenAI.Message).init(allocator);
-    try messages.append(.{
+    // create the array to store the conversation in
+    var messages = std.ArrayList(OpenAI.Message).empty;
+    defer messages.deinit(gpa);
+
+    // system prompt
+    try messages.append(
+        gpa,
+        .{
         .role = "system",
         .content = "You are a helpful assistant",
     });
 
     while (true) {
-        try writer.writeAll("> ");
-        try buf_writer.flush();
+        try stdout.writeAll("> ");
+        try stdout.flush();
 
-        if (try reader.readUntilDelimiterOrEof(&buffer, '\n')) |line| {
+        // TODO: fix for 0.15.1
+        if (try stdin.allocatorreadUntilDelimiterOrEof(&buffer, '\n')) |line| {
             const user_message = OpenAI.Message{
                 .role = "user",
-                .content = try allocator.dupe(u8, line),
+                .content = try gpa.dupe(u8, line),
             };
-            try messages.append(user_message);
+            try messages.append(gpa, user_message);
 
             const payload = OpenAI.ChatPayload{
                 .model = "gemma-3n-E4B-it-Q4_K_M.gguf",
@@ -51,17 +61,18 @@ pub fn main() !void {
             var responseString: []const u8 = "";
             while (try stream.next()) |response| {
                 if (response.choices[0].delta.content) |content| {
-                    try writer.writeAll(content);
-                    try buf_writer.flush();
+                    try stdout.writeAll(content);
+                    try stdout.flush();
                     responseString = try std.fmt.allocPrint(allocator, "{s}{s}", .{ responseString, content });
                 }
             }
 
-            writer.writeAll("\n") catch unreachable;
-            buf_writer.flush() catch unreachable;
+            stdout.writeAll("\n") catch unreachable;
+            stdout.flush() catch unreachable;
 
             try messages.append(
-                OpenAI.Message{
+                gpa,
+                .{
                     .role = "assistant",
                     .content = responseString,
                 },

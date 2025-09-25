@@ -84,6 +84,8 @@ pub const ModelResponse = struct {
     data: []Model,
 };
 
+/// StreamReader is the interface used to parse an incoming SSE stream.
+/// this should follow the specs
 const StreamReader = struct {
     arena: std.heap.ArenaAllocator,
     request: std.http.Client.Request,
@@ -102,8 +104,12 @@ const StreamReader = struct {
     }
 
     pub fn next(self: *StreamReader) !?StreamResponse {
-        const line = (try self.request.reader().readUntilDelimiterOrEof(&self.buffer, '\n')) orelse return null;
-        try self.request.reader().skipBytes(1, .{}); // Skip second newline
+        // read the data from the recieved response
+        const line = try self.request.reader
+        //const line = (try self.request.reader.(&self.buffer, '\n')) orelse return null;
+
+        // skip second new line from sse
+        try self.request.reader.skipBytes(1, .{}); 
 
         if (line.len == 0) return null;
 
@@ -312,23 +318,13 @@ pub const Client = struct {
             return err;
         }
 
-
-        // BUG: This is empty, get a 200 above.
         const response_body: *std.Io.Reader = req.reader.bodyReader(
             &trans_buffer,
             req.response_transfer_encoding,
             req.response_content_length,
         );
 
-        // DEBUG code
-        std.debug.print("Status {d}", .{response.head.status});
-        std.debug.print("Buff len {d}", .{response_body.bufferedLen()});
-        for (response_body.buffered()) |char| {
-            std.debug.print("hello{c}", .{char});
-        }
-
         const size =  try response_body.readSliceShort(&read_buffer);
-        
 
         // note: this is up to the end user to free.
         const parsed = try std.json.parseFromSlice(ChatResponse, self.allocator, read_buffer[0..size], .{
@@ -363,20 +359,16 @@ test "client_local_chat" {
     var messages = std.ArrayList(Message).empty;
     defer messages.deinit(gpa);
 
-    const user = Message{
+    const system = Message{
         .role = "system",
         .content = "You are a simple agent. Return True.",
     };
 
-    const system = Message{
-        .role = "system",
+    const user = Message{
+        .role = "user",
         .content = "Return True.",
     };
 
-    // Its a good idea to check and make sure the array is
-    // allocated to the proper amount if known at compile time.
-    // If not there are other fn availible.
-    //_ = messages.addManyAsArrayAssumeCapacity(2);
     try messages.append(gpa, system);
     try messages.append(gpa, user);
 
@@ -393,13 +385,13 @@ test "client_local_chat" {
     defer response.deinit();
 
     if (response.value.choices[0].message.content) |content| {
-        //_ = try std.fmt.allocPrint(gpa, "{s}", .{content});
         try std.testing.expect(content.len > 0);
     }
 
 }
 
-// TODO: test once fixes are finished
+// goal is to create a local client and stream a small message
+// any model will do
 test "client_local_streamChat" {
     const gpa = std.testing.allocator;
 
@@ -413,6 +405,7 @@ test "client_local_streamChat" {
     const user = Message{
         .role = "system",
         .content = "You are a simple agent. Return True.",
+        .content = "You're task is simple. Return True.",
     };
 
     const system = Message{
@@ -434,12 +427,15 @@ test "client_local_streamChat" {
         .temperature = 0.1,
     };
 
-    var reader = try client.streamChat(payload, false);
-
-    const resp = try reader.next();
-    const content = resp.?.choices[0].delta.content;
-    try std.testing.expect(content.len > 0);
-
+    var stream = try client.streamChat(payload, false);
+    defer stream.deinit();
+    const responseString: []const u8 = "";
+    while (try stream.next()) |response| {
+        if (response.choices[0].delta.content) |content| {
+            try std.testing.expect(content.len > 0);
+        }
+    }
+    try std.testing.expect(responseString.len > 0);
 }
 
 // TODO maybe give fake api key for now and expect key failure
